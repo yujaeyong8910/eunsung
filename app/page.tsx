@@ -6,7 +6,7 @@ import ChatInterface from '@/components/ChatInterface';
 import AppointmentSidebar from '@/components/AppointmentSidebar';
 import MobileAppointmentSheet from '@/components/MobileAppointmentSheet';
 import SettingsModal from '@/components/SettingsModal';
-import { getApiKey, getAppointments, saveAppointments } from '@/lib/storage';
+import { getApiKey, getAppointments, addAppointment, deleteAppointment } from '@/lib/storage';
 import { generateSchedule } from '@/lib/schedule';
 import { TimeSlot, Appointment } from '@/types';
 
@@ -23,20 +23,18 @@ export default function Home() {
     setApiKey(key);
     if (!key) setShowSettings(true);
     setSchedule(generateSchedule(14));
-    setAppointments(getAppointments());
+    getAppointments().then(setAppointments);
     setMounted(true);
   }, []);
 
-  const handleBook = (apt: Appointment) => {
-    const updated = [...appointments, apt];
-    setAppointments(updated);
-    saveAppointments(updated);
+  const handleBook = async (apt: Appointment) => {
+    await addAppointment(apt);
+    setAppointments((prev) => [...prev, apt]);
   };
 
-  const handleCancel = (id: string) => {
-    const updated = appointments.filter((a) => a.id !== id);
-    setAppointments(updated);
-    saveAppointments(updated);
+  const handleCancel = async (id: string) => {
+    await deleteAppointment(id);
+    setAppointments((prev) => prev.filter((a) => a.id !== id));
   };
 
   const handleApiKeySave = (key: string) => {

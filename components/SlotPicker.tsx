@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { TimeSlot } from '@/types';
 import { formatDate, formatTime } from '@/lib/schedule';
-import { Calendar, Clock, UserRound, X, CheckCircle2 } from 'lucide-react';
+import { Calendar, Clock, UserRound, X, ExternalLink } from 'lucide-react';
 
 interface Props {
   slots: TimeSlot[];
@@ -15,8 +15,11 @@ export default function SlotPicker({ slots, onSelect }: Props) {
 
   if (slots.length === 0) return null;
 
+  const BOOKING_URL = 'https://www.samsun.or.kr/samsun/contents/view.do?mId=38';
+
   const handleConfirm = () => {
     if (!pending) return;
+    window.open(BOOKING_URL, '_blank', 'noopener,noreferrer');
     onSelect(pending);
     setPending(null);
   };
@@ -91,7 +94,7 @@ export default function SlotPicker({ slots, onSelect }: Props) {
               </div>
 
               <p className="text-xs text-slate-500 text-center">
-                위 시간으로 예약하시겠습니까?
+                좋은삼선병원 홈페이지에서 예약을 진행합니다.
               </p>
             </div>
 
@@ -106,8 +109,8 @@ export default function SlotPicker({ slots, onSelect }: Props) {
                 onClick={handleConfirm}
                 className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-xl text-sm text-white font-semibold transition-colors flex items-center justify-center gap-1.5"
               >
-                <CheckCircle2 className="w-4 h-4" />
-                예약 확정
+                <ExternalLink className="w-4 h-4" />
+                홈페이지에서 예약
               </button>
             </div>
           </div>
