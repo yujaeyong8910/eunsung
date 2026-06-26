@@ -1,17 +1,15 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
-import { Send, AlertCircle, KeyRound, RefreshCcw, CheckCircle2 } from 'lucide-react';
-import { Message, TimeSlot, Appointment, Department, ChatStep } from '@/types';
+import { Send, AlertCircle, KeyRound, RefreshCcw, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Message, Department, ChatStep } from '@/types';
 import { sendMessage } from '@/lib/openrouter';
-import { getAvailableSlots, formatDate, formatTime } from '@/lib/schedule';
 import MessageBubble from './MessageBubble';
-import SlotPicker from './SlotPicker';
+
+const BOOKING_URL = 'https://www.samsun.or.kr/samsun/contents/view.do?mId=38';
 
 interface Props {
   apiKey: string;
-  schedule: TimeSlot[];
-  onBook: (apt: Appointment) => void;
   onSettingsNeeded: () => void;
 }
 
@@ -19,12 +17,12 @@ const WELCOME: Message = {
   id: 'welcome',
   role: 'assistant',
   content:
-    '안녕하세요! 좋은삼선병원 AI 진료 예약 도우미입니다.\n\n어떤 증상이나 불편사항이 있으신가요? 말씀해 주시면 적합한 진료과와 예약 가능한 시간을 안내해 드리겠습니다.',
+    '안녕하세요! 좋은삼선병원 AI 진료 예약 도우미입니다.\n\n어떤 증상이나 불편사항이 있으신가요? 증상을 말씀해 주시면 적합한 진료과를 안내하고 병원 홈페이지 예약 페이지로 연결해 드리겠습니다.',
   timestamp: new Date().toISOString(),
   step: 'greeting',
 };
 
-export default function ChatInterface({ apiKey, schedule, onBook, onSettingsNeeded }: Props) {
+export default function ChatInterface({ apiKey, onSettingsNeeded }: Props) {
   const [messages, setMessages] = useState<Message[]>([WELCOME]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,8 +35,8 @@ export default function ChatInterface({ apiKey, schedule, onBook, onSettingsNeed
   const breadcrumbStep = useMemo(() => {
     const lastBot = [...messages].reverse().find((m) => m.role === 'assistant');
     const s = lastBot?.step as ChatStep | undefined;
-    if (s === 'confirmed' || s === 'suggestion') return 2;
-    if (s === 'schedule_check' || s === 'analyzing') return 1;
+    if (s === 'suggestion') return 2;
+    if (s === 'analyzing') return 1;
     return 0;
   }, [messages]);
 
@@ -46,7 +44,6 @@ export default function ChatInterface({ apiKey, schedule, onBook, onSettingsNeed
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, loading]);
 
-  // Auto-resize textarea
   useEffect(() => {
     const ta = textareaRef.current;
     if (!ta) return;
@@ -76,27 +73,16 @@ export default function ChatInterface({ apiKey, schedule, onBook, onSettingsNeed
     setError(null);
 
     try {
-      // Build conversation history (readable content only)
       const history = [...messages, userMsg].map((m) => ({
         role: m.role,
         content: m.content,
       }));
 
-      // Determine if we should fetch slots
-      const slotsForContext = currentDept ? getAvailableSlots(currentDept, schedule, 6) : undefined;
-
       const response = await sendMessage(apiKey, history, {
         currentDepartment: currentDept ?? undefined,
-        availableSlots: slotsForContext,
       });
 
-      // Update department state
       if (response.department) setCurrentDept(response.department);
-
-      // Get slots to display inline
-      const dept = response.department ?? currentDept;
-      const displaySlots =
-        response.showSlots && dept ? getAvailableSlots(dept, schedule, 6) : [];
 
       const botMsg: Message = {
         id: `b-${Date.now()}`,
@@ -104,7 +90,6 @@ export default function ChatInterface({ apiKey, schedule, onBook, onSettingsNeed
         content: response.message,
         timestamp: new Date().toISOString(),
         step: response.step,
-        slots: displaySlots.length > 0 ? displaySlots : undefined,
         urgency: response.urgency,
         department: response.department ?? undefined,
         symptoms: response.symptoms?.length ? response.symptoms : undefined,
@@ -116,46 +101,7 @@ export default function ChatInterface({ apiKey, schedule, onBook, onSettingsNeed
     } finally {
       setLoading(false);
     }
-  }, [input, loading, apiKey, messages, currentDept, schedule, onSettingsNeeded]);
-
-  const handleSlotSelect = useCallback(
-    (slot: TimeSlot) => {
-      const apt: Appointment = {
-        id: `apt-${Date.now()}`,
-        slot,
-        inquiry: messages.find((m) => m.role === 'user')?.content ?? '',
-        bookedAt: new Date().toISOString(),
-      };
-      onBook(apt);
-
-      // Remove slots from all messages (prevent re-selecting)
-      const userConfirm: Message = {
-        id: `u-${Date.now()}`,
-        role: 'user',
-        content: `${formatDate(slot.date)} ${formatTime(slot.time)}, ${slot.department} ${slot.doctor}으로 예약하겠습니다.`,
-        timestamp: new Date().toISOString(),
-      };
-
-      setMessages((prev) => [
-        ...prev.map((m) => ({ ...m, slots: undefined })),
-        userConfirm,
-      ]);
-
-      // Confirmation message
-      const confirm: Message = {
-        id: `b-${Date.now() + 1}`,
-        role: 'assistant',
-        content: `예약이 완료되었습니다!\n\n📅 날짜: ${formatDate(slot.date)}\n⏰ 시간: ${formatTime(slot.time)}\n🏥 진료과: ${slot.department}\n👨‍⚕️ 담당의: ${slot.doctor}\n\n진료 시 건강보험증을 지참해 주세요. 다른 불편사항이 있으시면 언제든지 말씀해 주세요.`,
-        timestamp: new Date(Date.now() + 500).toISOString(),
-        step: 'confirmed',
-      };
-
-      setTimeout(() => {
-        setMessages((prev) => [...prev, confirm]);
-      }, 400);
-    },
-    [messages, onBook]
-  );
+  }, [input, loading, apiKey, messages, currentDept, onSettingsNeeded]);
 
   const handleReset = () => {
     setMessages([WELCOME]);
@@ -178,7 +124,7 @@ export default function ChatInterface({ apiKey, schedule, onBook, onSettingsNeed
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-slate-200 bg-white">
         <div className="flex items-center gap-2">
-          {['환자 문의 인식', '일정 확인', '예약 제안'].map((label, i) => (
+          {['환자 문의 인식', '증상 분석', '예약 안내'].map((label, i) => (
             <span key={i} className="flex items-center gap-1.5 text-xs">
               {i > 0 && <span className="text-slate-300 mx-0.5">›</span>}
               {i < breadcrumbStep ? (
@@ -210,8 +156,18 @@ export default function ChatInterface({ apiKey, schedule, onBook, onSettingsNeed
         {messages.map((msg) => (
           <div key={msg.id}>
             <MessageBubble message={msg} />
-            {msg.slots && msg.slots.length > 0 && (
-              <SlotPicker slots={msg.slots} onSelect={handleSlotSelect} />
+            {msg.step === 'suggestion' && (
+              <div className="ml-10 mt-3">
+                <a
+                  href={BOOKING_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-semibold transition-colors shadow-sm"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  좋은삼선병원 홈페이지에서 예약하기
+                </a>
+              </div>
             )}
           </div>
         ))}

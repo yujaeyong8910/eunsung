@@ -1,14 +1,11 @@
-import { LLMResponse, TimeSlot } from '@/types';
+import { LLMResponse } from '@/types';
 
 const API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-function buildSystemPrompt(opts?: {
-  currentDepartment?: string;
-  availableSlots?: TimeSlot[];
-}): string {
-  let prompt = `당신은 친절하고 전문적인 의료 예약 관리 AI 어시스턴트입니다.
+function buildSystemPrompt(opts?: { currentDepartment?: string }): string {
+  let prompt = `당신은 친절하고 전문적인 의료 상담 AI 어시스턴트입니다.
 
-**목표:** 환자의 증상을 파악하고 적절한 진료과를 추천하며 예약을 도와드립니다.
+**목표:** 환자의 증상을 파악하고 적절한 진료과를 추천한 뒤, 병원 홈페이지에서 예약하도록 안내합니다.
 
 **병원:** 좋은삼선병원 (부산 성북구)
 
@@ -18,34 +15,24 @@ function buildSystemPrompt(opts?: {
 - 반드시 순수 JSON만 반환 (마크다운 코드블록 없이)
 - message는 친절하고 자연스러운 한국어
 - 응급 증상(흉통, 호흡곤란, 의식저하)은 urgency: "high"로 즉시 응급실 안내
-- showSlots는 예약 가능 시간을 보여줄 때만 true
+- suggestion 단계에서는 아래 버튼으로 홈페이지 예약을 안내한다고 message에 언급
 
 **JSON 스키마 (반드시 준수):**
 {
   "message": "환자에게 전달할 메시지 (한국어)",
-  "step": "inquiry | analyzing | schedule_check | suggestion | confirmed",
+  "step": "inquiry | analyzing | suggestion",
   "department": "추천 진료과 또는 null",
   "urgency": "low | medium | high",
-  "symptoms": ["증상 목록"],
-  "showSlots": true 또는 false
+  "symptoms": ["증상 목록"]
 }
 
 **대화 흐름:**
-1. inquiry: 증상/불편사항 파악 (추가 질문)
-2. analyzing: 증상 분석 완료, 진료과 결정, 일정 확인 제안
-3. schedule_check: showSlots: true로 예약 가능 시간 표시
-4. suggestion: 특정 시간 직접 추천 (showSlots: true)
-5. confirmed: 예약 완료 안내`;
+1. inquiry: 증상/불편사항 파악 (추가 질문으로 정확한 증상 파악)
+2. analyzing: 증상 분석 완료, 진료과 결정
+3. suggestion: 진료과 추천 완료, 아래 버튼을 눌러 홈페이지에서 예약하도록 안내`;
 
   if (opts?.currentDepartment) {
     prompt += `\n\n**현재 추천 진료과:** ${opts.currentDepartment}`;
-  }
-
-  if (opts?.availableSlots && opts.availableSlots.length > 0) {
-    prompt += `\n\n**예약 가능한 시간 (이 중에서 showSlots: true로 안내하세요):**\n`;
-    opts.availableSlots.forEach((s) => {
-      prompt += `- ${s.date} ${s.time} | ${s.department} | ${s.doctor}\n`;
-    });
   }
 
   return prompt;
@@ -54,7 +41,7 @@ function buildSystemPrompt(opts?: {
 export async function sendMessage(
   apiKey: string,
   messages: { role: string; content: string }[],
-  opts?: { currentDepartment?: string; availableSlots?: TimeSlot[] }
+  opts?: { currentDepartment?: string }
 ): Promise<LLMResponse> {
   const res = await fetch(API_URL, {
     method: 'POST',
@@ -92,7 +79,7 @@ export async function sendMessage(
       department: parsed.department ?? undefined,
       urgency: parsed.urgency ?? 'low',
       symptoms: Array.isArray(parsed.symptoms) ? parsed.symptoms : [],
-      showSlots: parsed.showSlots === true,
+      showSlots: false,
     };
   } catch {
     return {
